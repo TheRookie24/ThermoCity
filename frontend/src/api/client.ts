@@ -1,30 +1,30 @@
-export const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+export const API_BASE =
+  (import.meta as any).env?.VITE_API_BASE ||
+  (import.meta as any).env?.VITE_API_BASE_URL ||
+  "/api";
 
-
-export async function apiFetch<T>(
+/**
+ * Thin fetch wrapper used across src/api/*.ts
+ * (UI-only, keeps backend untouched)
+ */
+export async function apiFetch<T = unknown>(
   path: string,
-  opts: RequestInit = {}
+  init: RequestInit = {}
 ): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
-    ...opts,
-    headers: {
-      "Content-Type": "application/json",
-      ...(opts.headers || {}),
-    },
+    ...init,
     credentials: "include",
+    headers: {
+      ...(init.headers || {}),
+      "Content-Type": "application/json",
+    },
   });
 
   if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    try {
-      const j = await res.json();
-      msg = j.detail || JSON.stringify(j);
-    } catch {}
-    throw new Error(msg);
+    const text = await res.text().catch(() => "");
+    throw new Error(`API ${res.status}: ${text || res.statusText}`);
   }
 
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return (await res.json()) as T;
-  // for download endpoints (handled separately)
-  return (await res.text()) as unknown as T;
+  if (res.status === 204) return null as T;
+  return (await res.json().catch(() => null)) as T;
 }
